@@ -9,7 +9,7 @@ import * as React from "react";
 // https://southeastasia.api.cognitive.microsoft.com/formrecognizer/documentModels/prebuilt-layout:analyze?api-version=2023-07-31&stringIndexType=utf16CodeUnit
 
 const OCR_ENDPOINT = "https://schedulerecongnizerus.cognitiveservices.azure.com/";
-const DOCUMENT_INTELLIGENCE_API_KEY =  "";// Replace this with the one sent on the chat
+const DOCUMENT_INTELLIGENCE_API_KEY =  "0dfb0318b63e4a469dba43f02c3da429";// Replace this with the one sent on the chat
 const timetable_image=  "https://imagestorehack.blob.core.windows.net/timetables/timetable_simple.png"
 function App() {
   const documentIntelligenceRef  = React.useRef(null);
@@ -40,10 +40,12 @@ function App() {
       }
       const poller = await getLongRunningPoller(client, initialResponse);
       const result = (await poller.pollUntilDone()).body ;
-      setLoading(false);
-      console.log("***Logging ");
+      const transformedRes = transformResult(result);
+      
+      console.log("***Logging ", transformResult(result));
       console.log(result);
-      setResult(result);
+      setResult(transformedRes);
+      setLoading(false);
   },[setError, setLoading]);
 
 
@@ -69,4 +71,31 @@ function App() {
   );
 }
 
+function transformResult(result) {
+  const tables = result.analyzeResult.tables;
+  const scheduleTable = tables[0];
+
+  // Hardcoding to 0 now and not mapping with the time constant
+  let timePeriods = scheduleTable.cells.filter((cell) => cell.columnIndex === 0 && cell.rowIndex !== 0);
+  const timePeriodsConverted = timePeriods.reduce((acc, cell) => {
+    acc.push(cell.content);
+    return acc;
+  } , []);  
+  const filteredSubjectCells = scheduleTable.cells.filter((cell) => cell.columnIndex !== 0 && cell.rowIndex !== 0);
+  // Transform the filtered cells into a map of day and events
+  const dayAndEventMap = filteredSubjectCells.reduce((acc, cell) => {
+    const {rowIndex, columnIndex} = cell;
+    acc[columnIndex] = acc[columnIndex] || [];
+    const subjectName  =  cell.content;
+    const timePeriod = timePeriodsConverted[rowIndex - 1]; 
+    acc[columnIndex].push({
+      timePeriod,
+      subjectName
+    });
+    return acc;
+  }, {});
+  
+  console.log("Day and Event Map", dayAndEventMap);
+  return dayAndEventMap;
+}
 export default App;
